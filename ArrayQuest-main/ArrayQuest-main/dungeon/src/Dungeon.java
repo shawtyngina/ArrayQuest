@@ -8,161 +8,56 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Random;
 
+// Main game class extending JPanel for GUI, implementing Runnable for game loop, and KeyListener for keyboard input
 public class Dungeon extends JPanel implements Runnable, KeyListener {
+    // --- Constants ---
     final int tileSize = 48;
     final int maxCol = 16;
     final int maxRow = 12;
     final int screenWidth = tileSize * maxCol;
     final int screenHeight = tileSize * maxRow;
 
+    // --- Game State ---
     Thread gameThread;
     boolean upPressed, downPressed, leftPressed, rightPressed, spacePressed, ePressed;
     int playerX = tileSize * 7, playerY = tileSize * 9, playerSpeed = 4, playerHealth = 5, stoneCount = 0, carrotCount = 0;
     String direction = "down";
     int totalMovement = 0;
     boolean spawnDialogueShown, moveDialogueShown, sandraNearDialogueShown, sandraDialogueShown, bossSpawnDialogueShown;
+    String collectionMessage = "";
+    int messageTimer = 0;
+    int stoneCooldown = 0;
+    final int stoneCooldownMax = 20;
+    boolean nearSandra, inDialogue;
+    boolean bossActive;
+    int bossHealth = 20, bossX, bossY, bossWidth = tileSize * 2, bossHeight = tileSize * 2;
+    int bossHitCounter, bossJumpTimer, bossJumpInterval = 120, bossSpeed = 2;
+    int bossTargetX, bossTargetY;
+    boolean bossMoving, bossDialogueShown;
+    String bossDialogue = "Haha, you fell into my trap!";
+    int bossDialogueTimer;
+    int webShootTimer, webShootInterval = 60;
+    boolean isPlayerDead;
+    boolean hasBazooka;
 
+    // --- Resources ---
     private BufferedImage wallImg, floorImg, doorImg, torchImg, soilImg;
     private BufferedImage playerUp, playerDown, playerLeft, playerRight;
     private BufferedImage heartImg, stoneImg, faceImg, npcImg, carrotImg, bossImg, projectileImg;
     private BufferedImage npcFaceImg, bazookaImg, bossFaceImg;
     private BufferedImage mainScreenImg, victoryImg, defeatImg, creditsImg;
     private Font pixelFont;
-    String collectionMessage = "";
-    int messageTimer = 0;
+    private Random random = new Random();
+    private Bazooka bazooka;
+
+    // --- Collections ---
     ArrayList<Message> messageQueue = new ArrayList<>();
-    int stoneCooldown = 0;
-    final int stoneCooldownMax = 20;
-    Random rand = new Random();
-    int npcX = tileSize * 5, npcY = tileSize * 6;
-    boolean nearSandra, inDialogue;
-
-    boolean bossActive;
-    int bossHealth = 10, bossX, bossY, bossWidth = tileSize * 2, bossHeight = tileSize * 2;
-    int bossHitCounter, bossJumpTimer, bossJumpInterval = 120, bossSpeed = 2;
-    int bossTargetX, bossTargetY;
-    boolean bossMoving, bossDialogueShown;
-    String bossDialogue = "Haha, you fell into my trap!";
-    int bossDialogueTimer;
-
     ArrayList<ThrownStone> thrownStones = new ArrayList<>();
     ArrayList<BossProjectile> bossProjectiles = new ArrayList<>();
     ArrayList<BazookaProjectile> bazookaProjectiles = new ArrayList<>();
-    int webShootTimer, webShootInterval = 60;
-
-    class Message {
-        String text;
-        boolean isInstructional;
-
-        Message(String text, boolean isInstructional) {
-            this.text = text;
-            this.isInstructional = isInstructional;
-        }
-    }
-
-    class Bazooka {
-        int damage = 10;
-
-        BazookaProjectile shoot(int x, int y, String direction) {
-            return new BazookaProjectile(x, y, direction);
-        }
-    }
-
-    class Stone {
-        int x, y, amount;
-        Rectangle hitbox;
-
-        Stone(int x, int y, int amount) {
-            this.x = x;
-            this.y = y;
-            this.amount = amount;
-            hitbox = new Rectangle(x, y, tileSize, tileSize);
-        }
-    }
-
-    class ThrownStone {
-        int x, y, speed = 10, distanceTraveled;
-        final int maxDistance = tileSize * 4;
-        String dir;
-
-        ThrownStone(int x, int y, String dir) {
-            this.x = x;
-            this.y = y;
-            this.dir = dir;
-        }
-
-        boolean update() {
-            int dx = 0, dy = 0;
-            switch (dir) {
-                case "up" -> dy = -speed;
-                case "down" -> dy = speed;
-                case "left" -> dx = -speed;
-                case "right" -> dx = speed;
-            }
-            int nextX = x + dx, nextY = y + dy;
-            int tileCol = (nextX + 12) / tileSize, tileRow = (nextY + 12) / tileSize;
-            if (!isWalkable(tileRow, tileCol) || distanceTraveled >= maxDistance) return false;
-            x = nextX;
-            y = nextY;
-            distanceTraveled += speed;
-            return true;
-        }
-    }
-
-    class BossProjectile {
-        int x, y, speed = 8, direction;
-        Rectangle hitbox;
-
-        BossProjectile(int x, int y, int direction) {
-            this.x = x;
-            this.y = y;
-            this.direction = direction;
-            hitbox = new Rectangle(x, y, tileSize / 2, tileSize / 2);
-        }
-
-        void update() {
-            switch (direction) {
-                case 0 -> y -= speed;
-                case 1 -> y += speed;
-                case 2 -> x -= speed;
-                case 3 -> x += speed;
-            }
-            hitbox.setLocation(x, y);
-        }
-
-        boolean isOutOfBounds() {
-            return x < 0 || x > screenWidth || y < 0 || y > screenHeight;
-        }
-    }
-
-    class BazookaProjectile {
-        int x, y, speed = 15;
-        String direction;
-        Rectangle hitbox;
-
-        BazookaProjectile(int x, int y, String direction) {
-            this.x = x;
-            this.y = y;
-            this.direction = direction;
-            hitbox = new Rectangle(x, y, tileSize, tileSize);
-        }
-
-        void update() {
-            switch (direction) {
-                case "up" -> y -= speed;
-                case "down" -> y += speed;
-                case "left" -> x -= speed;
-                case "right" -> x += speed;
-            }
-            hitbox.setLocation(x, y);
-        }
-
-        boolean isOutOfBounds() {
-            return x < 0 || x > screenWidth || y < 0 || y > screenHeight;
-        }
-    }
-
     ArrayList<Stone> stonePiles = new ArrayList<>();
+
+    // --- Map Data ---
     int currentMapIndex = 0;
     String[][] maps = {
             {
@@ -195,13 +90,130 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
             }
     };
     String[] map = maps[currentMapIndex];
-    boolean isPlayerDead;
-    Bazooka bazooka;
-    boolean hasBazooka;
 
+    // --- Game State Enum ---
     enum GameState { MAIN_SCREEN, PLAYING, VICTORY, DEFEAT, CREDITS }
     private GameState gameState = GameState.MAIN_SCREEN;
 
+    // Represents a dialogue message with text and a flag for instructional priority
+    class Message {
+        String text;
+        boolean isInstructional;
+
+        Message(String text, boolean isInstructional) {
+            this.text = text;
+            this.isInstructional = isInstructional;
+        }
+    }
+
+    // Models the bazooka weapon, creating projectiles when fired
+    class Bazooka {
+        int damage = 10;
+
+        BazookaProjectile shoot(int x, int y, String direction) {
+            return new BazookaProjectile(x, y, direction);
+        }
+    }
+
+    // Represents a collectible stone pile with position and amount
+    class Stone {
+        int x, y, amount;
+        Rectangle hitbox;
+
+        Stone(int x, int y, int amount) {
+            this.x = x;
+            this.y = y;
+            this.amount = amount;
+            hitbox = new Rectangle(x, y, tileSize, tileSize);
+        }
+    }
+
+    // Models a thrown stone by the player, moving until hitting a wall or max distance
+    class ThrownStone {
+        int x, y, speed = 10, distanceTraveled;
+        final int maxDistance = tileSize * 4;
+        String dir;
+
+        ThrownStone(int x, int y, String dir) {
+            this.x = x;
+            this.y = y;
+            this.dir = dir;
+        }
+
+        boolean update() {
+            int dx = 0, dy = 0;
+            switch (dir) {
+                case "up" -> dy = -speed;
+                case "down" -> dy = speed;
+                case "left" -> dx = -speed;
+                case "right" -> dx = speed;
+            }
+            int nextX = x + dx, nextY = y + dy;
+            int tileCol = (nextX + 12) / tileSize, tileRow = (nextY + 12) / tileSize;
+            if (!isWalkable(tileRow, tileCol) || distanceTraveled >= maxDistance) return false;
+            x = nextX;
+            y = nextY;
+            distanceTraveled += speed;
+            return true;
+        }
+    }
+
+    // Represents a boss-fired projectile, damaging the player on collision
+    class BossProjectile {
+        int x, y, speed = 8, direction;
+        Rectangle hitbox;
+
+        BossProjectile(int x, int y, int direction) {
+            this.x = x;
+            this.y = y;
+            this.direction = direction;
+            hitbox = new Rectangle(x, y, tileSize / 2, tileSize / 2);
+        }
+
+        void update() {
+            switch (direction) {
+                case 0 -> y -= speed;
+                case 1 -> y += speed;
+                case 2 -> x -= speed;
+                case 3 -> x += speed;
+            }
+            hitbox.setLocation(x, y);
+        }
+
+        boolean isOutOfBounds() {
+            return x < 0 || x > screenWidth || y < 0 || y > screenHeight;
+        }
+    }
+
+    // Models a bazooka projectile, dealing high damage to the boss
+    class BazookaProjectile {
+        int x, y, speed = 15;
+        String direction;
+        Rectangle hitbox;
+
+        BazookaProjectile(int x, int y, String direction) {
+            this.x = x;
+            this.y = y;
+            this.direction = direction;
+            hitbox = new Rectangle(x, y, tileSize, tileSize);
+        }
+
+        void update() {
+            switch (direction) {
+                case "up" -> y -= speed;
+                case "down" -> y += speed;
+                case "left" -> x -= speed;
+                case "right" -> x += speed;
+            }
+            hitbox.setLocation(x, y);
+        }
+
+        boolean isOutOfBounds() {
+            return x < 0 || x > screenWidth || y < 0 || y > screenHeight;
+        }
+    }
+
+    // Initializes the game panel and loads resources
     public Dungeon() {
         setPreferredSize(new Dimension(screenWidth, screenHeight));
         setBackground(Color.black);
@@ -213,6 +225,7 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         spawnStones();
     }
 
+    // Loads all game images from the /image/ directory
     public void loadImages() {
         try {
             wallImg = loadImage("wall.png");
@@ -243,6 +256,7 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         }
     }
 
+    // Loads an image, scaling non-screen images to 48x48 pixels
     public BufferedImage loadImage(String name) throws IOException {
         BufferedImage original = ImageIO.read(getClass().getResourceAsStream("/image/" + name));
         if (name.equals("MainScreen.png") || name.equals("Victory.png") ||
@@ -256,6 +270,7 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         return scaled;
     }
 
+    // Loads the pixel font for dialogue and UI text
     public void loadFont() {
         try {
             pixelFont = Font.createFont(Font.TRUETYPE_FONT, getClass().getResourceAsStream("/font/PressStart2P-Regular.ttf")).deriveFont(18f);
@@ -264,24 +279,27 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         }
     }
 
+    // Spawns 3-4 stone piles on random walkable tiles
     public void spawnStones() {
         stonePiles.clear();
-        int piles = rand.nextInt(2) + 3;
+        int piles = random.nextInt(2) + 3;
         for (int i = 0; i < piles; i++) {
             int col, row;
             do {
-                col = rand.nextInt(maxCol);
-                row = rand.nextInt(maxRow);
+                col = random.nextInt(maxCol);
+                row = random.nextInt(maxRow);
             } while (map[row].charAt(col) != '.');
-            stonePiles.add(new Stone(col * tileSize, row * tileSize, rand.nextInt(3) + 3));
+            stonePiles.add(new Stone(col * tileSize, row * tileSize, random.nextInt(3) + 3));
         }
     }
 
+    // Starts the game thread to run the game loop
     public void startGameThread() {
         gameThread = new Thread(this);
         gameThread.start();
     }
 
+    // Implements the 60 FPS game loop, calling update and repaint
     public void run() {
         double interval = 1000000000.0 / 60;
         double delta = 0;
@@ -298,9 +316,12 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         }
     }
 
+    /*
+     * Updates game state for PLAYING, handling movement, dialogues, stones, boss,
+     * projectiles, and map switching
+     */
     public void update() {
-        if (isPlayerDead) return;
-        if (gameState != GameState.PLAYING) return;
+        if (isPlayerDead || gameState != GameState.PLAYING) return;
 
         if (playerHealth <= 0) {
             isPlayerDead = true;
@@ -311,7 +332,7 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         if (messageTimer <= 0 && !messageQueue.isEmpty()) {
             Message next = messageQueue.remove(0);
             collectionMessage = next.text;
-            messageTimer = 200;
+            messageTimer = 600;
         }
 
         if (!spawnDialogueShown) {
@@ -364,7 +385,7 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                 map[centerTileRow] = map[centerTileRow].substring(0, centerTileCol) + 'c' + map[centerTileRow].substring(centerTileCol + 1);
                 if (!bossActive) {
                     bossActive = true;
-                    bossHealth = 10;
+                    bossHealth = 20;
                     bossHitCounter = 0;
                     bossX = tileSize * (maxCol / 2 - 1);
                     bossY = tileSize * (maxRow / 2 - 1);
@@ -392,7 +413,7 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                     if (bossRect.intersects(new Rectangle(stone.x, stone.y, 24, 24))) {
                         bossHitCounter++;
                         bossHealth--;
-                        messageQueue.add(new Message("Boss hit! Health: " + bossHealth + "/10", false));
+                        messageQueue.add(new Message("Boss hit! Health: " + bossHealth + "/20", false));
                         if (bossHealth <= 0) {
                             bossActive = false;
                             messageQueue.add(new Message("Boss defeated!", false));
@@ -440,8 +461,8 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
 
                 bossJumpTimer++;
                 if (bossJumpTimer >= bossJumpInterval) {
-                    bossTargetX = tileSize * (rand.nextInt(maxCol - 2) + 1);
-                    bossTargetY = tileSize * (rand.nextInt(maxRow - 2) + 1);
+                    bossTargetX = tileSize * (random.nextInt(maxCol - 2) + 1);
+                    bossTargetY = tileSize * (random.nextInt(maxRow - 2) + 1);
                     bossJumpTimer = 0;
                     bossMoving = true;
                 }
@@ -460,6 +481,37 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
 
                 shootProjectiles();
             }
+
+            Rectangle bossRect = new Rectangle(bossX, bossY, bossWidth, bossHeight);
+            for (int i = bazookaProjectiles.size() - 1; i >= 0; i--) {
+                BazookaProjectile bp = bazookaProjectiles.get(i);
+                bp.update();
+                if (bp.isOutOfBounds() || (bossActive && bossRect.intersects(bp.hitbox))) {
+                    if (!bp.isOutOfBounds()) {
+                        bossHealth -= 5;
+                        messageQueue.add(new Message("Boss hit! Health: " + bossHealth + "/20", false));
+                        if (bossHealth <= 0) {
+                            bossActive = false;
+                            messageQueue.add(new Message("Boss defeated!", false));
+                            gameState = GameState.VICTORY;
+                        }
+                    }
+                    bazookaProjectiles.remove(i);
+                }
+            }
+
+            Rectangle playerRect = new Rectangle(playerX, playerY, tileSize, tileSize);
+            for (int i = bossProjectiles.size() - 1; i >= 0; i--) {
+                BossProjectile bp = bossProjectiles.get(i);
+                bp.update();
+                if (bp.isOutOfBounds() || playerRect.intersects(bp.hitbox)) {
+                    if (!bp.isOutOfBounds()) {
+                        playerHealth--;
+                        messageQueue.add(new Message("You were hit by a projectile!", false));
+                    }
+                    bossProjectiles.remove(i);
+                }
+            }
         } else if (ePressed) {
             ePressed = false;
             inDialogue = false;
@@ -468,41 +520,13 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                 sandraDialogueShown = true;
             }
         }
-
-        for (int i = bazookaProjectiles.size() - 1; i >= 0; i--) {
-            BazookaProjectile bp = bazookaProjectiles.get(i);
-            bp.update();
-            if (bp.isOutOfBounds()) {
-                bazookaProjectiles.remove(i);
-            } else if (bossActive && new Rectangle(bossX, bossY, bossWidth, bossHeight).intersects(bp.hitbox)) {
-                bossHealth -= 5;
-                messageQueue.add(new Message("Boss hit! Health: " + bossHealth + "/20", false));
-                bazookaProjectiles.remove(i);
-                if (bossHealth <= 0) {
-                    bossActive = false;
-                    messageQueue.add(new Message("Boss defeated!", false));
-                    gameState = GameState.VICTORY;
-                }
-            }
-        }
-
-        for (int i = bossProjectiles.size() - 1; i >= 0; i--) {
-            BossProjectile bp = bossProjectiles.get(i);
-            bp.update();
-            if (bp.isOutOfBounds()) {
-                bossProjectiles.remove(i);
-            } else if (new Rectangle(playerX, playerY, tileSize, tileSize).intersects(bp.hitbox)) {
-                playerHealth--;
-                messageQueue.add(new Message("You were hit by a projectile!", false));
-                bossProjectiles.remove(i);
-            }
-        }
     }
 
+    // Creates boss projectiles every 60 frames if the boss is active
     public void shootProjectiles() {
         if (bossActive && webShootTimer <= 0) {
             for (int i = 0; i < 3; i++) {
-                bossProjectiles.add(new BossProjectile(bossX + bossWidth / 2, bossY + bossHeight / 2, rand.nextInt(4)));
+                bossProjectiles.add(new BossProjectile(bossX + bossWidth / 2, bossY + bossHeight / 2, random.nextInt(4)));
             }
             webShootTimer = webShootInterval;
         } else {
@@ -510,12 +534,14 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         }
     }
 
+    // Checks if a tile is walkable (not a wall or torch)
     public boolean isWalkable(int row, int col) {
         if (row < 0 || row >= map.length || col < 0 || col >= map[0].length()) return false;
         char tile = map[row].charAt(col);
         return tile != 'W' && tile != 'T';
     }
 
+    // Switches to a new map, resetting player position and spawning stones
     public void switchMap(int nextMapIndex) {
         if (nextMapIndex >= maps.length) return;
         currentMapIndex = nextMapIndex;
@@ -526,6 +552,10 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         messageQueue.add(new Message("Entered new map!", false));
     }
 
+    /*
+     * Renders the game based on gameState, showing screens, map, entities, UI,
+     * dialogues, and messages
+     */
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
 
@@ -569,7 +599,6 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
             return;
         }
 
-        // Render map
         for (int row = 0; row < map.length; row++) {
             for (int col = 0; col < map[row].length(); col++) {
                 int x = col * tileSize, y = row * tileSize;
@@ -586,7 +615,6 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
             }
         }
 
-        // Render player
         BufferedImage playerImg = switch (direction) {
             case "up" -> playerUp;
             case "down" -> playerDown;
@@ -597,27 +625,21 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         g.drawImage(playerImg, playerX, playerY, tileSize, tileSize, null);
         if (hasBazooka) g.drawImage(bazookaImg, playerX + tileSize + 10, playerY, tileSize / 2, tileSize / 2, null);
 
-        // Render NPC
         if (currentMapIndex == 0) g.drawImage(npcImg, npcX, npcY, tileSize, tileSize, null);
 
-        // Render stones
         for (Stone stone : stonePiles) g.drawImage(stoneImg, stone.x, stone.y, tileSize, tileSize, null);
-
-        // Render thrown stones
         for (ThrownStone stone : thrownStones) g.drawImage(stoneImg, stone.x, stone.y, 24, 24, null);
 
-        // Render boss and projectiles
         if (bossActive) {
             g.drawImage(bossImg, bossX, bossY, bossWidth, bossHeight, null);
             g.setColor(Color.GRAY);
             g.fillRect(bossX, bossY - 10, bossWidth, 8);
             g.setColor(Color.RED);
-            g.fillRect(bossX, bossY - 10, (int) ((double) bossHealth / 10 * bossWidth), 8);
+            g.fillRect(bossX, bossY - 10, (int) ((double) bossHealth / 20 * bossWidth), 8);
         }
         for (BazookaProjectile bp : bazookaProjectiles) g.drawImage(projectileImg, bp.x, bp.y, tileSize, tileSize, null);
         for (BossProjectile bp : bossProjectiles) g.drawImage(projectileImg, bp.x, bp.y, tileSize / 2, tileSize / 2, null);
 
-        // Render UI
         g.drawImage(faceImg, 10, 10, 80, 80, null);
         int heartStartX = 100, heartY = 20;
         for (int i = 0; i < playerHealth; i++) g.drawImage(heartImg, heartStartX + (i * 20), heartY, 32, 32, null);
@@ -631,7 +653,6 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         g.drawString("x" + carrotCount, heartStartX + 30, carrotY + 16);
         if (hasBazooka) g.drawImage(bazookaImg, heartStartX, carrotY + 40, 32, 32, null);
 
-        // Render dialogues
         if (inDialogue) {
             g.setColor(new Color(0, 0, 0, 200));
             g.fillRect(0, screenHeight - 150, screenWidth, 150);
@@ -661,7 +682,6 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
             g.drawString("Press E to continue...", screenWidth - 200, screenHeight - 30);
         }
 
-        // Render collection messages
         if (messageTimer > 0 && !collectionMessage.isEmpty()) {
             Font regularFont = pixelFont.deriveFont(20f), boldFont = pixelFont.deriveFont(Font.BOLD, 20f);
             g.setColor(Color.YELLOW);
@@ -710,6 +730,7 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         }
     }
 
+    // Handles key presses for state transitions and player controls
     public void keyPressed(KeyEvent e) {
         switch (gameState) {
             case MAIN_SCREEN -> {
@@ -727,7 +748,7 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                     hasBazooka = false;
                     bazooka = null;
                     bossActive = false;
-                    bossHealth = 10;
+                    bossHealth = 20;
                     bossHitCounter = 0;
                     bossX = 0;
                     bossY = 0;
@@ -803,6 +824,7 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         }
     }
 
+    // Clears input flags when keys are released in PLAYING state
     public void keyReleased(KeyEvent e) {
         if (gameState != GameState.PLAYING) return;
         switch (e.getKeyCode()) {
@@ -814,8 +836,7 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         }
     }
 
-    public void keyTyped(KeyEvent e) {}
-
+    // Program entry point, sets up the window and starts the game
     public static void main(String[] args) {
         JFrame window = new JFrame("Dungeon");
         Dungeon game = new Dungeon();
