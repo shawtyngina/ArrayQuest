@@ -7,6 +7,7 @@ import javax.imageio.ImageIO;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Random;
+import java.util.List;
 
 public class Dungeon extends JPanel implements Runnable, KeyListener {
     final int tileSize = 48;
@@ -19,12 +20,18 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
     boolean upPressed, downPressed, leftPressed, rightPressed, spacePressed, ePressed;
     int playerX = tileSize * 7, playerY = tileSize * 9, playerSpeed = 4, playerHealth = 5, stoneCount = 0, carrotCount = 0;
     String direction = "down";
+    int totalMovement = 0;
+    boolean spawnDialogueShown = false;
+    boolean moveDialogueShown = false;
+    boolean sandraNearDialogueShown = false;
+    boolean sandraDialogueShown = false;
+    boolean bossSpawnDialogueShown = false;
 
     private BufferedImage wallImg, floorImg, doorImg, torchImg, soilImg;
     private BufferedImage playerUp, playerDown, playerLeft, playerRight;
     private BufferedImage heartImg, stoneImg, faceImg, npcImg, carrotImg, bossImg, projectileImg;
-    private BufferedImage npcFaceImg, menuBackgroundImg, bazookaImg, bossFaceImg;
-    private BufferedImage winImage;
+    private BufferedImage npcFaceImg, bazookaImg, bossFaceImg;
+    private BufferedImage mainScreenImg, victoryImg, defeatImg, creditsImg;
     private Font pixelFont;
     String collectionMessage = "";
     int messageTimer = 0;
@@ -217,10 +224,8 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
     Bazooka bazooka;
     boolean hasBazooka = false;
 
-    enum GameState { MENU, PLAYING, WON }
-    private GameState gameState = GameState.MENU;
-
-    int winTimer = 0;
+    enum GameState { MAIN_SCREEN, PLAYING, VICTORY, DEFEAT, CREDITS }
+    private GameState gameState = GameState.MAIN_SCREEN;
 
     public Dungeon() {
         setPreferredSize(new Dimension(screenWidth, screenHeight));
@@ -252,10 +257,12 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
             bossImg = loadImage("boss.png");
             projectileImg = loadImage("bazooka_projectile.png");
             npcFaceImg = loadImage("sandra_face.png");
-            menuBackgroundImg = loadImage("menu_background.png");
             bazookaImg = loadImage("bazooka.png");
             bossFaceImg = loadImage("boss_face.png");
-            winImage = loadImage("win_image.png");
+            mainScreenImg = loadImage("MainScreen.png");
+            victoryImg = loadImage("Victory.png");
+            defeatImg = loadImage("Defeat.png");
+            creditsImg = loadImage("Credits.png");
         } catch (IOException e) {
             System.out.println("Image loading failed: " + e.getMessage());
         }
@@ -326,7 +333,16 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         if (gameState == GameState.PLAYING) {
             if (playerHealth <= 0) {
                 isPlayerDead = true;
+                gameState = GameState.DEFEAT;
                 return;
+            }
+
+            if (!spawnDialogueShown) {
+                if (messageTimer <= 0) {
+                    collectionMessage = "How did I get here? I should walk around and explore. Move around with ASWD keys.";
+                    messageTimer = 600;
+                    spawnDialogueShown = true;
+                }
             }
 
             if (!inDialogue) {
@@ -336,18 +352,22 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                 if (upPressed) {
                     nextY -= playerSpeed;
                     direction = "up";
+                    totalMovement += playerSpeed;
                 }
                 if (downPressed) {
                     nextY += playerSpeed;
                     direction = "down";
+                    totalMovement += playerSpeed;
                 }
                 if (leftPressed) {
                     nextX -= playerSpeed;
                     direction = "left";
+                    totalMovement += playerSpeed;
                 }
                 if (rightPressed) {
                     nextX += playerSpeed;
                     direction = "right";
+                    totalMovement += playerSpeed;
                 }
 
                 int leftTile = (nextX + 8) / tileSize;
@@ -361,12 +381,24 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                     playerY = nextY;
                 }
 
+                if (!moveDialogueShown && totalMovement >= 144 && messageTimer <= 0) {
+                    collectionMessage = "I should probably collect these rocks, they may be useful.";
+                    messageTimer = 600;
+                    moveDialogueShown = true;
+                }
+
                 Rectangle playerRect = new Rectangle(playerX, playerY, tileSize, tileSize);
                 if (currentMapIndex == 0) {
                     Rectangle npcRect = new Rectangle(npcX, npcY, tileSize, tileSize);
                     nearSandra = playerRect.intersects(npcRect);
                 } else {
                     nearSandra = false;
+                }
+
+                if (!sandraNearDialogueShown && nearSandra && messageTimer <= 0) {
+                    collectionMessage = "Oh look! A lady, let me go to her and ask where am I. Interact with the lady using E.";
+                    messageTimer = 600;
+                    sandraNearDialogueShown = true;
                 }
 
                 int centerTileCol = (playerX + tileSize / 2) / tileSize;
@@ -377,15 +409,19 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                     carrotCount -= 5;
                     bazooka = new Bazooka(10);
                     hasBazooka = true;
-                    collectionMessage = "You obtained a Bazooka!";
-                    messageTimer = 120;
+                    if (messageTimer <= 0) {
+                        collectionMessage = "You obtained a Bazooka!";
+                        messageTimer = 600;
+                    }
                     ePressed = false;
                 }
 
                 if (ePressed && currentTile == 'C' && carrotCount > 0) {
                     carrotCount--;
-                    collectionMessage = "You planted a carrot!";
-                    messageTimer = 120;
+                    if (messageTimer <= 0) {
+                        collectionMessage = "You planted a carrot!";
+                        messageTimer = 600;
+                    }
 
                     StringBuilder modifiedRow = new StringBuilder(map[centerTileRow]);
                     modifiedRow.setCharAt(centerTileCol, 'c');
@@ -398,6 +434,11 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                         bossX = tileSize * (maxCol / 2 - 1);
                         bossY = tileSize * (maxRow / 2 - 1);
                         bossDialogueShown = true;
+                        if (!bossSpawnDialogueShown && messageTimer <= 0) {
+                            collectionMessage = "Oh no! I can use my rocks to fight the boss. Press SPACE and aim at the boss to deal it damage.";
+                            messageTimer = 600;
+                            bossSpawnDialogueShown = true;
+                        }
                     }
                     ePressed = false;
                 }
@@ -405,8 +446,10 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                 stonePiles.removeIf(stone -> {
                     if (playerRect.intersects(stone.hitbox)) {
                         stoneCount += stone.amount;
-                        collectionMessage = "You collected a stone x" + stone.amount;
-                        messageTimer = 120;
+                        if (messageTimer <= 0) {
+                            collectionMessage = "You collected a stone x" + stone.amount;
+                            messageTimer = 600;
+                        }
                         return true;
                     }
                     return false;
@@ -418,14 +461,17 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                         if (bossRect.intersects(new Rectangle(stone.x, stone.y, 24, 24))) {
                             bossHitCounter++;
                             bossHealth--;
-                            collectionMessage = "Boss hit! Health: " + bossHealth + "/20";
-                            messageTimer = 120;
+                            if (messageTimer <= 0) {
+                                collectionMessage = "Boss hit! Health: " + bossHealth + "/20";
+                                messageTimer = 600;
+                            }
                             if (bossHealth <= 0) {
                                 bossActive = false;
-                                collectionMessage = "Boss defeated!";
-                                messageTimer = 120;
-                                gameState = GameState.WON;
-                                winTimer = 0;
+                                if (messageTimer <= 0) {
+                                    collectionMessage = "Boss defeated!";
+                                    messageTimer = 600;
+                                }
+                                gameState = GameState.VICTORY;
                             }
                             return true;
                         }
@@ -452,8 +498,10 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
 
                 if (ePressed && nearSandra) {
                     carrotCount++;
-                    collectionMessage = "Sandra gave you a carrot!";
-                    messageTimer = 120;
+                    if (messageTimer <= 0) {
+                        collectionMessage = "Sandra gave you a carrot!";
+                        messageTimer = 600;
+                    }
                     inDialogue = true;
                     currentDialogue = 0;
                     ePressed = false;
@@ -502,6 +550,11 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                 if (ePressed) {
                     ePressed = false;
                     inDialogue = false;
+                    if (!sandraDialogueShown && messageTimer <= 0) {
+                        collectionMessage = "I should go through that door and explore some more.";
+                        messageTimer = 600;
+                        sandraDialogueShown = true;
+                    }
                 }
             }
 
@@ -515,16 +568,19 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                     Rectangle bossRect = new Rectangle(bossX, bossY, bossWidth, bossHeight);
                     if (bossRect.intersects(bp.hitbox)) {
                         bossHealth -= 5;
-                        collectionMessage = "Boss hit! Health: " + bossHealth + "/20";
-                        messageTimer = 120;
+                        if (messageTimer <= 0) {
+                            collectionMessage = "Boss hit! Health: " + bossHealth + "/20";
+                            messageTimer = 600;
+                        }
 
                         bazookaProjectiles.remove(i);
                         if (bossHealth <= 0) {
                             bossActive = false;
-                            collectionMessage = "Boss defeated!";
-                            messageTimer = 120;
-                            gameState = GameState.WON;
-                            winTimer = 0;
+                            if (messageTimer <= 0) {
+                                collectionMessage = "Boss defeated!";
+                                messageTimer = 600;
+                            }
+                            gameState = GameState.VICTORY;
                         }
                     }
                 }
@@ -540,19 +596,14 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
                 } else {
                     Rectangle playerRect = new Rectangle(playerX, playerY, tileSize, tileSize);
                     if (playerRect.intersects(bp.hitbox)) {
-                        collectionMessage = "You were hit by a projectile!";
-                        messageTimer = 120;
+                        if (messageTimer <= 0) {
+                            collectionMessage = "You were hit by a projectile!";
+                            messageTimer = 600;
+                        }
                         playerHealth--;
                         bossProjectiles.remove(bp);
                         break;
                     }
-                }
-            }
-
-            if (gameState == GameState.WON) {
-                winTimer++;
-                if (winTimer > 180) {
-                    gameState = GameState.MENU;
                 }
             }
         }
@@ -586,23 +637,59 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         playerY = tileSize * 2;
 
         spawnStones();
-        collectionMessage = "Entered new map!";
-        messageTimer = 120;
+        if (messageTimer <= 0) {
+            collectionMessage = "Entered new map!";
+            messageTimer = 600;
+        }
     }
 
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
 
-        if (gameState == GameState.MENU) {
-            drawMainMenu(g);
-            return;
-        }
-        if (gameState == GameState.WON) {
-            drawWinScreen(g);
+        if (gameState == GameState.MAIN_SCREEN) {
+            g.drawImage(mainScreenImg, 0, 0, screenWidth, screenHeight, null);
+            g.setColor(Color.WHITE);
+            g.setFont(new Font("Arial", Font.PLAIN, 24));
+            String instruction = "Press SPACE to Start";
+            FontMetrics fm = g.getFontMetrics();
+            int instrWidth = fm.stringWidth(instruction);
+            g.drawString(instruction, (screenWidth - instrWidth) / 2, screenHeight - 50);
             return;
         }
 
-        Graphics2D g2d = (Graphics2D) g;
+        if (gameState == GameState.VICTORY) {
+            g.drawImage(victoryImg, 0, 0, screenWidth, screenHeight, null);
+            g.setColor(Color.WHITE);
+            g.setFont(new Font("Arial", Font.PLAIN, 24));
+            String instruction = "Press SPACE for Credits";
+            FontMetrics fm = g.getFontMetrics();
+            int instrWidth = fm.stringWidth(instruction);
+            g.drawString(instruction, (screenWidth - instrWidth) / 2, screenHeight - 50);
+            return;
+        }
+
+        if (gameState == GameState.DEFEAT) {
+            g.drawImage(defeatImg, 0, 0, screenWidth, screenHeight, null);
+            g.setColor(Color.WHITE);
+            g.setFont(new Font("Arial", Font.PLAIN, 24));
+            String instruction = "Press SPACE for Credits";
+            FontMetrics fm = g.getFontMetrics();
+            int instrWidth = fm.stringWidth(instruction);
+            g.drawString(instruction, (screenWidth - instrWidth) / 2, screenHeight - 50);
+            return;
+        }
+
+        if (gameState == GameState.CREDITS) {
+            g.drawImage(creditsImg, 0, 0, screenWidth, screenHeight, null);
+            g.setColor(Color.WHITE);
+            g.setFont(new Font("Arial", Font.PLAIN, 24));
+            String instruction = "Press SPACE to Play Again";
+            FontMetrics fm = g.getFontMetrics();
+            int instrWidth = fm.stringWidth(instruction);
+            g.drawString(instruction, (screenWidth - instrWidth) / 2, screenHeight - 50);
+            return;
+        }
+
         drawMap(g);
         drawPlayer(g);
         drawNPC(g);
@@ -644,22 +731,6 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         if (inDialogue) {
             drawDialogueBox(g);
         }
-    }
-
-    public void drawMainMenu(Graphics g) {
-        g.drawImage(menuBackgroundImg, 0, 0, screenWidth, screenHeight, null);
-
-        g.setColor(Color.WHITE);
-        g.setFont(new Font("Arial", Font.BOLD, 48));
-        String title = "Dungeon Adventure";
-        FontMetrics fm = g.getFontMetrics();
-        int titleWidth = fm.stringWidth(title);
-        g.drawString(title, (screenWidth - titleWidth) / 2, screenHeight / 2 - 50);
-
-        g.setFont(new Font("Arial", Font.PLAIN, 24));
-        String instruction = "Press SPACE to Start";
-        int instrWidth = g.getFontMetrics().stringWidth(instruction);
-        g.drawString(instruction, (screenWidth - instrWidth) / 2, screenHeight / 2 + 20);
     }
 
     public void drawMap(Graphics g) {
@@ -764,25 +835,48 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         g.drawImage(stoneImg, stoneImageX, stoneY, 24, 24, null);
         g.setColor(Color.WHITE);
         g.setFont(pixelFont);
-        g.drawString("x" + stoneCount, stoneImageX + 30, stoneY + 16); 
+        g.drawString("x" + stoneCount, stoneImageX + 30, stoneY + 16);
 
         int carrotImageX = heartStartX;
-        int carrotY = stoneY + 40; 
+        int carrotY = stoneY + 40;
         g.drawImage(carrotImg, carrotImageX, carrotY, 24, 24, null);
         g.drawString("x" + carrotCount, carrotImageX + 30, carrotY + 16);
 
         if (hasBazooka) {
-            g.drawImage(bazookaImg, carrotImageX, carrotY + 40, 32, 32, null); 
+            g.drawImage(bazookaImg, carrotImageX, carrotY + 40, 32, 32, null);
         }
 
         if (messageTimer > 0 && !collectionMessage.isEmpty()) {
             g.setFont(pixelFont.deriveFont(20f));
             g.setColor(Color.YELLOW);
             FontMetrics fm = g.getFontMetrics();
-            int textWidth = fm.stringWidth(collectionMessage);
-            int x = (screenWidth - textWidth) / 2;
-            int y = screenHeight - 40;
-            g.drawString(collectionMessage, x, y);
+            int maxWidth = screenWidth - 40;
+            List<String> lines = new ArrayList<>();
+            String[] words = collectionMessage.split(" ");
+            StringBuilder currentLine = new StringBuilder();
+            for (String word : words) {
+                String testLine = currentLine.length() == 0 ? word : currentLine + " " + word;
+                if (fm.stringWidth(testLine) <= maxWidth) {
+                    currentLine.append(currentLine.length() == 0 ? word : " " + word);
+                } else {
+                    lines.add(currentLine.toString());
+                    currentLine = new StringBuilder(word);
+                }
+            }
+            if (currentLine.length() > 0) {
+                lines.add(currentLine.toString());
+            }
+
+            int lineHeight = fm.getHeight();
+            int totalHeight = lineHeight * lines.size();
+            int startY = screenHeight - 40 - (totalHeight - lineHeight) / 2;
+
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i);
+                int textWidth = fm.stringWidth(line);
+                int x = (screenWidth - textWidth) / 2;
+                g.drawString(line, x, startY + i * lineHeight);
+            }
         }
     }
 
@@ -810,14 +904,89 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
         g.drawString("Press E to continue...", screenWidth - 200, screenHeight - 30);
     }
 
-    public void drawWinScreen(Graphics g) {
-        g.drawImage(winImage, 0, 0, screenWidth, screenHeight, null);
-    }
-
     public void keyPressed(KeyEvent e) {
-        if (gameState == GameState.MENU) {
+        if (gameState == GameState.MAIN_SCREEN) {
             if (e.getKeyCode() == KeyEvent.VK_SPACE) {
                 gameState = GameState.PLAYING;
+            }
+            return;
+        }
+
+        if (gameState == GameState.VICTORY || gameState == GameState.DEFEAT) {
+            if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+                gameState = GameState.CREDITS;
+            }
+            return;
+        }
+
+        if (gameState == GameState.CREDITS) {
+            if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+                gameState = GameState.MAIN_SCREEN;
+                playerHealth = 5;
+                stoneCount = 0;
+                carrotCount = 0;
+                hasBazooka = false;
+                bazooka = null;
+                bossActive = false;
+                bossHealth = 20;
+                bossHitCounter = 0;
+                bossX = 0;
+                bossY = 0;
+                bossMoving = false;
+                bossDialogueShown = false;
+                bossDialogueTimer = 0;
+                currentMapIndex = 0;
+                maps = new String[][] {
+                    {
+                        "WTWWWWWWWWWDDWTW",
+                        "W..............W",
+                        "W..............W",
+                        "W..............W",
+                        "W..............W",
+                        "W..............W",
+                        "W..............W",
+                        "W..............W",
+                        "W..............W",
+                        "W..............W",
+                        "W..............W",
+                        "WWWWWWWWWWWWWWWW"
+                    },
+                    {
+                        "WWWWWWWWWWWWWWWW",
+                        "W..............W",
+                        "T.....C........T",
+                        "W..............W",
+                        "W..............W",
+                        "W..............W",
+                        "W..............W",
+                        "W..............W",
+                        "W..............W",
+                        "T.............ST",
+                        "W..............W",
+                        "WWWWWWWWWWWWWWWW"
+                    }
+                };
+                map = maps[currentMapIndex];
+                playerX = tileSize * 7;
+                playerY = tileSize * 9;
+                direction = "down";
+                isPlayerDead = false;
+                thrownStones.clear();
+                bazookaProjectiles.clear();
+                bossProjectiles.clear();
+                stonePiles.clear();
+                spawnStones();
+                stoneCooldown = 0;
+                inDialogue = false;
+                currentDialogue = 0;
+                nearSandra = false;
+                webShootTimer = 0;
+                totalMovement = 0;
+                spawnDialogueShown = false;
+                moveDialogueShown = false;
+                sandraNearDialogueShown = false;
+                sandraDialogueShown = false;
+                bossSpawnDialogueShown = false;
             }
             return;
         }
@@ -830,13 +999,10 @@ public class Dungeon extends JPanel implements Runnable, KeyListener {
             case KeyEvent.VK_SPACE -> spacePressed = true;
             case KeyEvent.VK_E -> ePressed = true;
         }
-
-        if (gameState == GameState.WON && e.getKeyCode() == KeyEvent.VK_SPACE) { 
-        }
     }
 
     public void keyReleased(KeyEvent e) {
-        if (gameState == GameState.MENU) return;
+        if (gameState == GameState.MAIN_SCREEN || gameState == GameState.VICTORY || gameState == GameState.DEFEAT || gameState == GameState.CREDITS) return;
 
         switch (e.getKeyCode()) {
             case KeyEvent.VK_W -> upPressed = false;
